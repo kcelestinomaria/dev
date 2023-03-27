@@ -13,13 +13,13 @@ import "../Dependencies/console.sol";
 * The LockupContractFactory deploys LockupContracts - its main purpose is to keep a registry of valid deployed 
 * LockupContracts. 
 * 
-* This registry is checked by LQTYToken when the Liquity deployer attempts to transfer LQTY tokens. During the first year 
-* since system deployment, the Liquity deployer is only allowed to transfer LQTY to valid LockupContracts that have been 
-* deployed by and recorded in the LockupContractFactory. This ensures the deployer's LQTY can't be traded or staked in the
+* This registry is checked by myJSRToken when the Liquity deployer attempts to transfer myJSR tokens. During the first year 
+* since system deployment, the Liquity deployer is only allowed to transfer myJSR to valid LockupContracts that have been 
+* deployed by and recorded in the LockupContractFactory. This ensures the deployer's myJSR can't be traded or staked in the
 * first year, and can only be sent to a verified LockupContract which unlocks at least one year after system deployment.
 *
 * LockupContracts can of course be deployed directly, but only those deployed through and recorded in the LockupContractFactory 
-* will be considered "valid" by LQTYToken. This is a convenient way to verify that the target address is a genuine 
+* will be considered "valid" by myJSRToken. This is a convenient way to verify that the target address is a genuine 
 * LockupContract.
 */
 
@@ -31,31 +31,31 @@ contract LockupContractFactory is ILockupContractFactory, Ownable, CheckContract
 
     uint constant public SECONDS_IN_ONE_YEAR = 31536000;
 
-    address public lqtyTokenAddress;
+    address public myJSRTokenAddress;
     
     mapping (address => address) public lockupContractToDeployer;
 
     // --- Events ---
 
-    event LQTYTokenAddressSet(address _lqtyTokenAddress);
+    event myJSRTokenAddressSet(address _myJSRTokenAddress);
     event LockupContractDeployedThroughFactory(address _lockupContractAddress, address _beneficiary, uint _unlockTime, address _deployer);
 
     // --- Functions ---
 
-    function setLQTYTokenAddress(address _lqtyTokenAddress) external override onlyOwner {
-        checkContract(_lqtyTokenAddress);
+    function setmyJSRTokenAddress(address _myJSRTokenAddress) external override onlyOwner {
+        checkContract(_myJSRTokenAddress);
 
-        lqtyTokenAddress = _lqtyTokenAddress;
-        emit LQTYTokenAddressSet(_lqtyTokenAddress);
+        myJSRTokenAddress = _myJSRTokenAddress;
+        emit myJSRTokenAddressSet(_myJSRTokenAddress);
 
         _renounceOwnership();
     }
 
     function deployLockupContract(address _beneficiary, uint _unlockTime) external override {
-        address lqtyTokenAddressCached = lqtyTokenAddress;
-        _requireLQTYAddressIsSet(lqtyTokenAddressCached);
+        address myJSRTokenAddressCached = myJSRTokenAddress;
+        _requiremyJSRAddressIsSet(myJSRTokenAddressCached);
         LockupContract lockupContract = new LockupContract(
-                                                        lqtyTokenAddressCached,
+                                                        myJSRTokenAddressCached,
                                                         _beneficiary, 
                                                         _unlockTime);
 
@@ -68,7 +68,7 @@ contract LockupContractFactory is ILockupContractFactory, Ownable, CheckContract
     }
 
     // --- 'require'  functions ---
-    function _requireLQTYAddressIsSet(address _lqtyTokenAddress) internal pure {
-        require(_lqtyTokenAddress != address(0), "LCF: LQTY Address is not set");
+    function _requiremyJSRAddressIsSet(address _myJSRTokenAddress) internal pure {
+        require(_myJSRTokenAddress != address(0), "LCF: myJSR Address is not set");
     }
 }

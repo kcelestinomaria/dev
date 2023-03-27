@@ -2,40 +2,40 @@
 
 pragma solidity 0.6.11;
 
-import "./Interfaces/ITroveManager.sol";
-import "./Interfaces/ISortedTroves.sol";
-import "./Dependencies/LiquityBase.sol";
+import "./Interfaces/IlockedSAFEManager.sol";
+import "./Interfaces/ISortedlockedSAFEs.sol";
+import "./Dependencies/JASIRIBase.sol";
 import "./Dependencies/Ownable.sol";
 import "./Dependencies/CheckContract.sol";
 
-contract HintHelpers is LiquityBase, Ownable, CheckContract {
+contract HintHelpers is JASIRIBase, Ownable, CheckContract {
     string constant public NAME = "HintHelpers";
 
-    ISortedTroves public sortedTroves;
-    ITroveManager public troveManager;
+    ISortedlockedSAFEs public sortedlockedSAFEs;
+    IlockedSAFEManager public lockedSAFEManager;
 
     // --- Events ---
 
-    event SortedTrovesAddressChanged(address _sortedTrovesAddress);
-    event TroveManagerAddressChanged(address _troveManagerAddress);
+    event SortedlockedSAFEsAddressChanged(address _sortedlockedSAFEsAddress);
+    event lockedSAFEManagerAddressChanged(address _lockedSAFEManagerAddress);
 
     // --- Dependency setters ---
 
     function setAddresses(
-        address _sortedTrovesAddress,
-        address _troveManagerAddress
+        address _sortedlockedSAFEsAddress,
+        address _lockedSAFEManagerAddress
     )
         external
         onlyOwner
     {
-        checkContract(_sortedTrovesAddress);
-        checkContract(_troveManagerAddress);
+        checkContract(_sortedlockedSAFEsAddress);
+        checkContract(_lockedSAFEManagerAddress);
 
-        sortedTroves = ISortedTroves(_sortedTrovesAddress);
-        troveManager = ITroveManager(_troveManagerAddress);
+        sortedlockedSAFEs = ISortedlockedSAFEs(_sortedlockedSAFEsAddress);
+        lockedSAFEManager = IlockedSAFEManager(_lockedSAFEManagerAddress);
 
-        emit SortedTrovesAddressChanged(_sortedTrovesAddress);
-        emit TroveManagerAddressChanged(_troveManagerAddress);
+        emit SortedlockedSAFEsAddressChanged(_sortedlockedSAFEsAddress);
+        emit lockedSAFEManagerAddressChanged(_lockedSAFEManagerAddress);
 
         _renounceOwnership();
     }
@@ -44,23 +44,23 @@ contract HintHelpers is LiquityBase, Ownable, CheckContract {
 
     /* getRedemptionHints() - Helper function for finding the right hints to pass to redeemCollateral().
      *
-     * It simulates a redemption of `_LUSDamount` to figure out where the redemption sequence will start and what state the final Trove
+     * It simulates a redemption of `_myUSDamount` to figure out where the redemption sequence will start and what state the final lockedSAFE
      * of the sequence will end up in.
      *
      * Returns three hints:
-     *  - `firstRedemptionHint` is the address of the first Trove with ICR >= MCR (i.e. the first Trove that will be redeemed).
-     *  - `partialRedemptionHintNICR` is the final nominal ICR of the last Trove of the sequence after being hit by partial redemption,
+     *  - `firstRedemptionHint` is the address of the first lockedSAFE with ICR >= MCR (i.e. the first lockedSAFE that will be redeemed).
+     *  - `partialRedemptionHintNICR` is the final nominal ICR of the last lockedSAFE of the sequence after being hit by partial redemption,
      *     or zero in case of no partial redemption.
-     *  - `truncatedLUSDamount` is the maximum amount that can be redeemed out of the the provided `_LUSDamount`. This can be lower than
-     *    `_LUSDamount` when redeeming the full amount would leave the last Trove of the redemption sequence with less net debt than the
+     *  - `truncatedmyUSDamount` is the maximum amount that can be redeemed out of the the provided `_myUSDamount`. This can be lower than
+     *    `_myUSDamount` when redeeming the full amount would leave the last lockedSAFE of the redemption sequence with less net debt than the
      *    minimum allowed value (i.e. MIN_NET_DEBT).
      *
-     * The number of Troves to consider for redemption can be capped by passing a non-zero value as `_maxIterations`, while passing zero
+     * The number of lockedSAFEs to consider for redemption can be capped by passing a non-zero value as `_maxIterations`, while passing zero
      * will leave it uncapped.
      */
 
     function getRedemptionHints(
-        uint _LUSDamount, 
+        uint _myUSDamount, 
         uint _price,
         uint _maxIterations
     )
@@ -69,56 +69,56 @@ contract HintHelpers is LiquityBase, Ownable, CheckContract {
         returns (
             address firstRedemptionHint,
             uint partialRedemptionHintNICR,
-            uint truncatedLUSDamount
+            uint truncatedmyUSDamount
         )
     {
-        ISortedTroves sortedTrovesCached = sortedTroves;
+        ISortedlockedSAFEs sortedlockedSAFEsCached = sortedlockedSAFEs;
 
-        uint remainingLUSD = _LUSDamount;
-        address currentTroveuser = sortedTrovesCached.getLast();
+        uint remainingmyUSD = _myUSDamount;
+        address currentlockedSAFEuser = sortedlockedSAFEsCached.getLast();
 
-        while (currentTroveuser != address(0) && troveManager.getCurrentICR(currentTroveuser, _price) < MCR) {
-            currentTroveuser = sortedTrovesCached.getPrev(currentTroveuser);
+        while (currentlockedSAFEuser != address(0) && lockedSAFEManager.getCurrentICR(currentlockedSAFEuser, _price) < MCR) {
+            currentlockedSAFEuser = sortedlockedSAFEsCached.getPrev(currentlockedSAFEuser);
         }
 
-        firstRedemptionHint = currentTroveuser;
+        firstRedemptionHint = currentlockedSAFEuser;
 
         if (_maxIterations == 0) {
             _maxIterations = uint(-1);
         }
 
-        while (currentTroveuser != address(0) && remainingLUSD > 0 && _maxIterations-- > 0) {
-            uint netLUSDDebt = _getNetDebt(troveManager.getTroveDebt(currentTroveuser))
-                .add(troveManager.getPendingLUSDDebtReward(currentTroveuser));
+        while (currentlockedSAFEuser != address(0) && remainingmyUSD > 0 && _maxIterations-- > 0) {
+            uint netmyUSDDebt = _getNetDebt(lockedSAFEManager.getlockedSAFEDebt(currentlockedSAFEuser))
+                .add(lockedSAFEManager.getPendingmyUSDDebtReward(currentlockedSAFEuser));
 
-            if (netLUSDDebt > remainingLUSD) {
-                if (netLUSDDebt > MIN_NET_DEBT) {
-                    uint maxRedeemableLUSD = LiquityMath._min(remainingLUSD, netLUSDDebt.sub(MIN_NET_DEBT));
+            if (netmyUSDDebt > remainingmyUSD) {
+                if (netmyUSDDebt > MIN_NET_DEBT) {
+                    uint maxRedeemablemyUSD = JASIRIMath._min(remainingmyUSD, netmyUSDDebt.sub(MIN_NET_DEBT));
 
-                    uint ETH = troveManager.getTroveColl(currentTroveuser)
-                        .add(troveManager.getPendingETHReward(currentTroveuser));
+                    uint ETH = lockedSAFEManager.getlockedSAFEColl(currentlockedSAFEuser)
+                        .add(lockedSAFEManager.getPendingETHReward(currentlockedSAFEuser));
 
-                    uint newColl = ETH.sub(maxRedeemableLUSD.mul(DECIMAL_PRECISION).div(_price));
-                    uint newDebt = netLUSDDebt.sub(maxRedeemableLUSD);
+                    uint newColl = ETH.sub(maxRedeemablemyUSD.mul(DECIMAL_PRECISION).div(_price));
+                    uint newDebt = netmyUSDDebt.sub(maxRedeemablemyUSD);
 
                     uint compositeDebt = _getCompositeDebt(newDebt);
-                    partialRedemptionHintNICR = LiquityMath._computeNominalCR(newColl, compositeDebt);
+                    partialRedemptionHintNICR = JASIRIMath._computeNominalCR(newColl, compositeDebt);
 
-                    remainingLUSD = remainingLUSD.sub(maxRedeemableLUSD);
+                    remainingmyUSD = remainingmyUSD.sub(maxRedeemablemyUSD);
                 }
                 break;
             } else {
-                remainingLUSD = remainingLUSD.sub(netLUSDDebt);
+                remainingmyUSD = remainingmyUSD.sub(netmyUSDDebt);
             }
 
-            currentTroveuser = sortedTrovesCached.getPrev(currentTroveuser);
+            currentlockedSAFEuser = sortedlockedSAFEsCached.getPrev(currentlockedSAFEuser);
         }
 
-        truncatedLUSDamount = _LUSDamount.sub(remainingLUSD);
+        truncatedmyUSDamount = _myUSDamount.sub(remainingmyUSD);
     }
 
-    /* getApproxHint() - return address of a Trove that is, on average, (length / numTrials) positions away in the 
-    sortedTroves list from the correct insert position of the Trove to be inserted. 
+    /* getApproxHint() - return address of a lockedSAFE that is, on average, (length / numTrials) positions away in the 
+    sortedlockedSAFEs list from the correct insert position of the lockedSAFE to be inserted. 
     
     Note: The output address is worst-case O(n) positions away from the correct insert position, however, the function 
     is probabilistic. Input can be tuned to guarantee results to a high degree of confidence, e.g:
@@ -131,14 +131,14 @@ contract HintHelpers is LiquityBase, Ownable, CheckContract {
         view
         returns (address hintAddress, uint diff, uint latestRandomSeed)
     {
-        uint arrayLength = troveManager.getTroveOwnersCount();
+        uint arrayLength = lockedSAFEManager.getlockedSAFEOwnersCount();
 
         if (arrayLength == 0) {
             return (address(0), 0, _inputRandomSeed);
         }
 
-        hintAddress = sortedTroves.getLast();
-        diff = LiquityMath._getAbsoluteDifference(_CR, troveManager.getNominalICR(hintAddress));
+        hintAddress = sortedlockedSAFEs.getLast();
+        diff = JASIRIMath._getAbsoluteDifference(_CR, lockedSAFEManager.getNominalICR(hintAddress));
         latestRandomSeed = _inputRandomSeed;
 
         uint i = 1;
@@ -147,11 +147,11 @@ contract HintHelpers is LiquityBase, Ownable, CheckContract {
             latestRandomSeed = uint(keccak256(abi.encodePacked(latestRandomSeed)));
 
             uint arrayIndex = latestRandomSeed % arrayLength;
-            address currentAddress = troveManager.getTroveFromTroveOwnersArray(arrayIndex);
-            uint currentNICR = troveManager.getNominalICR(currentAddress);
+            address currentAddress = lockedSAFEManager.getlockedSAFEFromlockedSAFEOwnersArray(arrayIndex);
+            uint currentNICR = lockedSAFEManager.getNominalICR(currentAddress);
 
             // check if abs(current - CR) > abs(closest - CR), and update closest if current is closer
-            uint currentDiff = LiquityMath._getAbsoluteDifference(currentNICR, _CR);
+            uint currentDiff = JASIRIMath._getAbsoluteDifference(currentNICR, _CR);
 
             if (currentDiff < diff) {
                 diff = currentDiff;
@@ -162,10 +162,10 @@ contract HintHelpers is LiquityBase, Ownable, CheckContract {
     }
 
     function computeNominalCR(uint _coll, uint _debt) external pure returns (uint) {
-        return LiquityMath._computeNominalCR(_coll, _debt);
+        return JASIRIMath._computeNominalCR(_coll, _debt);
     }
 
     function computeCR(uint _coll, uint _debt, uint _price) external pure returns (uint) {
-        return LiquityMath._computeCR(_coll, _debt, _price);
+        return JASIRIMath._computeCR(_coll, _debt, _price);
     }
 }

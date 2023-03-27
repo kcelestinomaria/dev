@@ -15,28 +15,28 @@ contract CollSurplusPool is Ownable, CheckContract, ICollSurplusPool {
     string constant public NAME = "CollSurplusPool";
 
     address public borrowerOperationsAddress;
-    address public troveManagerAddress;
+    address public lockedSAFEManagerAddress;
     address public activePoolAddress;
 
-    // deposited ether tracker
-    uint256 internal ETH;
-    // Collateral surplus claimable by trove owners
+    // deposited UNLOCKer tracker
+    uint256 internal UNLOCK;
+    // Collateral surplus claimable by lockedSAFE owners
     mapping (address => uint) internal balances;
 
     // --- Events ---
 
     event BorrowerOperationsAddressChanged(address _newBorrowerOperationsAddress);
-    event TroveManagerAddressChanged(address _newTroveManagerAddress);
+    event lockedSAFEManagerAddressChanged(address _newlockedSAFEManagerAddress);
     event ActivePoolAddressChanged(address _newActivePoolAddress);
 
     event CollBalanceUpdated(address indexed _account, uint _newBalance);
-    event EtherSent(address _to, uint _amount);
+    event UNLOCKerSent(address _to, uint _amount);
     
     // --- Contract setters ---
 
     function setAddresses(
         address _borrowerOperationsAddress,
-        address _troveManagerAddress,
+        address _lockedSAFEManagerAddress,
         address _activePoolAddress
     )
         external
@@ -44,24 +44,24 @@ contract CollSurplusPool is Ownable, CheckContract, ICollSurplusPool {
         onlyOwner
     {
         checkContract(_borrowerOperationsAddress);
-        checkContract(_troveManagerAddress);
+        checkContract(_lockedSAFEManagerAddress);
         checkContract(_activePoolAddress);
 
         borrowerOperationsAddress = _borrowerOperationsAddress;
-        troveManagerAddress = _troveManagerAddress;
+        lockedSAFEManagerAddress = _lockedSAFEManagerAddress;
         activePoolAddress = _activePoolAddress;
 
         emit BorrowerOperationsAddressChanged(_borrowerOperationsAddress);
-        emit TroveManagerAddressChanged(_troveManagerAddress);
+        emit lockedSAFEManagerAddressChanged(_lockedSAFEManagerAddress);
         emit ActivePoolAddressChanged(_activePoolAddress);
 
         _renounceOwnership();
     }
 
-    /* Returns the ETH state variable at ActivePool address.
-       Not necessarily equal to the raw ether balance - ether can be forcibly sent to contracts. */
-    function getETH() external view override returns (uint) {
-        return ETH;
+    /* Returns the UNLOCK state variable at ActivePool address.
+       Not necessarily equal to the raw UNLOCKer balance - UNLOCKer can be forcibly sent to contracts. */
+    function getUNLOCK() external view override returns (uint) {
+        return UNLOCK;
     }
 
     function getCollateral(address _account) external view override returns (uint) {
@@ -71,7 +71,7 @@ contract CollSurplusPool is Ownable, CheckContract, ICollSurplusPool {
     // --- Pool functionality ---
 
     function accountSurplus(address _account, uint _amount) external override {
-        _requireCallerIsTroveManager();
+        _requireCallerIslockedSAFEManager();
 
         uint newAmount = balances[_account].add(_amount);
         balances[_account] = newAmount;
@@ -87,11 +87,11 @@ contract CollSurplusPool is Ownable, CheckContract, ICollSurplusPool {
         balances[_account] = 0;
         emit CollBalanceUpdated(_account, 0);
 
-        ETH = ETH.sub(claimableColl);
-        emit EtherSent(_account, claimableColl);
+        UNLOCK = UNLOCK.sub(claimableColl);
+        emit UNLOCKerSent(_account, claimableColl);
 
         (bool success, ) = _account.call{ value: claimableColl }("");
-        require(success, "CollSurplusPool: sending ETH failed");
+        require(success, "CollSurplusPool: sending UNLOCK failed");
     }
 
     // --- 'require' functions ---
@@ -102,10 +102,10 @@ contract CollSurplusPool is Ownable, CheckContract, ICollSurplusPool {
             "CollSurplusPool: Caller is not Borrower Operations");
     }
 
-    function _requireCallerIsTroveManager() internal view {
+    function _requireCallerIslockedSAFEManager() internal view {
         require(
-            msg.sender == troveManagerAddress,
-            "CollSurplusPool: Caller is not TroveManager");
+            msg.sender == lockedSAFEManagerAddress,
+            "CollSurplusPool: Caller is not lockedSAFEManager");
     }
 
     function _requireCallerIsActivePool() internal view {
@@ -118,6 +118,6 @@ contract CollSurplusPool is Ownable, CheckContract, ICollSurplusPool {
 
     receive() external payable {
         _requireCallerIsActivePool();
-        ETH = ETH.add(msg.value);
+        UNLOCK = UNLOCK.add(msg.value);
     }
 }

@@ -9,9 +9,10 @@ import "./Dependencies/CheckContract.sol";
 import "./Dependencies/console.sol";
 
 /*
- * The Active Pool holds the ETH collateral and LUSD debt (but not LUSD tokens) for all active troves.
+Formerly ETH -> UNLOCK , LUSD -> myUSD , trove -> lockedSAFE
+ * The Active Pool holds the UNLOCK collateral and myUSD debt (but not myUSD tokens) for all active lockedSAFEs.
  *
- * When a trove is liquidated, it's ETH and LUSD debt are transferred from the Active Pool, to either the
+ * When a lockedSAFE is liquidated, it's UNLOCK and myUSD debt are transferred from the Active Pool, to either the
  * Stability Pool, the Default Pool, or both, depending on the liquidation conditions.
  *
  */
@@ -21,24 +22,24 @@ contract ActivePool is Ownable, CheckContract, IActivePool {
     string constant public NAME = "ActivePool";
 
     address public borrowerOperationsAddress;
-    address public troveManagerAddress;
+    address public lockedSAFEManagerAddress;
     address public stabilityPoolAddress;
     address public defaultPoolAddress;
-    uint256 internal ETH;  // deposited ether tracker
-    uint256 internal LUSDDebt;
+    uint256 internal UNLOCK;  // deposited UNLOCKer tracker
+    uint256 internal myUSDDebt;
 
     // --- Events ---
 
     event BorrowerOperationsAddressChanged(address _newBorrowerOperationsAddress);
-    event TroveManagerAddressChanged(address _newTroveManagerAddress);
-    event ActivePoolLUSDDebtUpdated(uint _LUSDDebt);
-    event ActivePoolETHBalanceUpdated(uint _ETH);
+    event lockedSAFEManagerAddressChanged(address _newlockedSAFEManagerAddress);
+    event ActivePoolmyUSDDebtUpdated(uint _myUSDDebt);
+    event ActivePoolUNLOCKBalanceUpdated(uint _UNLOCK);
 
     // --- Contract setters ---
 
     function setAddresses(
         address _borrowerOperationsAddress,
-        address _troveManagerAddress,
+        address _lockedSAFEManagerAddress,
         address _stabilityPoolAddress,
         address _defaultPoolAddress
     )
@@ -46,17 +47,17 @@ contract ActivePool is Ownable, CheckContract, IActivePool {
         onlyOwner
     {
         checkContract(_borrowerOperationsAddress);
-        checkContract(_troveManagerAddress);
+        checkContract(_lockedSAFEManagerAddress);
         checkContract(_stabilityPoolAddress);
         checkContract(_defaultPoolAddress);
 
         borrowerOperationsAddress = _borrowerOperationsAddress;
-        troveManagerAddress = _troveManagerAddress;
+        lockedSAFEManagerAddress = _lockedSAFEManagerAddress;
         stabilityPoolAddress = _stabilityPoolAddress;
         defaultPoolAddress = _defaultPoolAddress;
 
         emit BorrowerOperationsAddressChanged(_borrowerOperationsAddress);
-        emit TroveManagerAddressChanged(_troveManagerAddress);
+        emit lockedSAFEManagerAddressChanged(_lockedSAFEManagerAddress);
         emit StabilityPoolAddressChanged(_stabilityPoolAddress);
         emit DefaultPoolAddressChanged(_defaultPoolAddress);
 
@@ -66,40 +67,40 @@ contract ActivePool is Ownable, CheckContract, IActivePool {
     // --- Getters for public variables. Required by IPool interface ---
 
     /*
-    * Returns the ETH state variable.
+    * Returns the UNLOCK state variable.
     *
-    *Not necessarily equal to the the contract's raw ETH balance - ether can be forcibly sent to contracts.
+    *Not necessarily equal to the the contract's raw UNLOCK balance - UNLOCKer can be forcibly sent to contracts.
     */
-    function getETH() external view override returns (uint) {
-        return ETH;
+    function getUNLOCK() external view override returns (uint) {
+        return UNLOCK;
     }
 
-    function getLUSDDebt() external view override returns (uint) {
-        return LUSDDebt;
+    function getmyUSDDebt() external view override returns (uint) {
+        return myUSDDebt;
     }
 
     // --- Pool functionality ---
 
-    function sendETH(address _account, uint _amount) external override {
-        _requireCallerIsBOorTroveMorSP();
-        ETH = ETH.sub(_amount);
-        emit ActivePoolETHBalanceUpdated(ETH);
-        emit EtherSent(_account, _amount);
+    function sendUNLOCK(address _account, uint _amount) external override {
+        _requireCallerIsBOorlockedSAFEMorSP();
+        UNLOCK = UNLOCK.sub(_amount);
+        emit ActivePoolUNLOCKBalanceUpdated(UNLOCK);
+        emit UNLOCKerSent(_account, _amount);
 
         (bool success, ) = _account.call{ value: _amount }("");
-        require(success, "ActivePool: sending ETH failed");
+        require(success, "ActivePool: sending UNLOCK failed");
     }
 
-    function increaseLUSDDebt(uint _amount) external override {
-        _requireCallerIsBOorTroveM();
-        LUSDDebt  = LUSDDebt.add(_amount);
-        ActivePoolLUSDDebtUpdated(LUSDDebt);
+    function increasemyUSDDebt(uint _amount) external override {
+        _requireCallerIsBOorlockedSAFEM();
+        myUSDDebt  = myUSDDebt.add(_amount);
+        ActivePoolmyUSDDebtUpdated(myUSDDebt);
     }
 
-    function decreaseLUSDDebt(uint _amount) external override {
-        _requireCallerIsBOorTroveMorSP();
-        LUSDDebt = LUSDDebt.sub(_amount);
-        ActivePoolLUSDDebtUpdated(LUSDDebt);
+    function decreasemyUSDDebt(uint _amount) external override {
+        _requireCallerIsBOorlockedSAFEMorSP();
+        myUSDDebt = myUSDDebt.sub(_amount);
+        ActivePoolmyUSDDebtUpdated(myUSDDebt);
     }
 
     // --- 'require' functions ---
@@ -111,26 +112,26 @@ contract ActivePool is Ownable, CheckContract, IActivePool {
             "ActivePool: Caller is neither BO nor Default Pool");
     }
 
-    function _requireCallerIsBOorTroveMorSP() internal view {
+    function _requireCallerIsBOorlockedSAFEMorSP() internal view {
         require(
             msg.sender == borrowerOperationsAddress ||
-            msg.sender == troveManagerAddress ||
+            msg.sender == lockedSAFEManagerAddress ||
             msg.sender == stabilityPoolAddress,
-            "ActivePool: Caller is neither BorrowerOperations nor TroveManager nor StabilityPool");
+            "ActivePool: Caller is neither BorrowerOperations nor lockedSAFEManager nor StabilityPool");
     }
 
-    function _requireCallerIsBOorTroveM() internal view {
+    function _requireCallerIsBOorlockedSAFEM() internal view {
         require(
             msg.sender == borrowerOperationsAddress ||
-            msg.sender == troveManagerAddress,
-            "ActivePool: Caller is neither BorrowerOperations nor TroveManager");
+            msg.sender == lockedSAFEManagerAddress,
+            "ActivePool: Caller is neither BorrowerOperations nor lockedSAFEManager");
     }
 
     // --- Fallback function ---
 
     receive() external payable {
         _requireCallerIsBorrowerOperationsOrDefaultPool();
-        ETH = ETH.add(msg.value);
-        emit ActivePoolETHBalanceUpdated(ETH);
+        UNLOCK = UNLOCK.add(msg.value);
+        emit ActivePoolUNLOCKBalanceUpdated(UNLOCK);
     }
 }
